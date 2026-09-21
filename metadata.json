@@ -1,0 +1,7 @@
+{
+  "name": "Nourish",
+  "description": "Mindful calorie and nutrition tracker featuring Scandinavian minimalism, balanced energy insights, and daily nourishment logging.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
+
