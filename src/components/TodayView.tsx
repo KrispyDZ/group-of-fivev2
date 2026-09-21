@@ -1,5 +1,6 @@
 import React from 'react';
 import { LoggedMeal, DayStreak, DailyNutritionState } from '../types';
+import { WaterTracker } from './WaterTracker';
 
 interface TodayViewProps {
   nutritionState: DailyNutritionState;
