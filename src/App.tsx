@@ -1,9 +1,4 @@
-/**
- * @license
- * SPDX-License-Identifier: Apache-2.0
- */
-
-import React, { useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { TabType, MealType, LoggedMeal, FoodItem, DailyNutritionState } from './types';
 import { INITIAL_MEALS, INITIAL_FOOD_ITEMS, INITIAL_STREAK } from './data/mockData';
 import { Header } from './components/Header';
@@ -22,6 +17,8 @@ export default function App() {
   const [activeMeal, setActiveMeal] = useState<MealType>('dinner');
   const [selectedDate, setSelectedDate] = useState<string>('2026-10-24');
   const [streakDays, setStreakDays] = useState(INITIAL_STREAK);
+  const toastTimeoutRef = useRef<number | null>(null);
+  const tabTimeoutRef = useRef<number | null>(null);
 
   const [nutritionState, setNutritionState] = useState<DailyNutritionState>({
     targetCalories: 2100,
@@ -48,15 +45,32 @@ export default function App() {
   const [detailMeal, setDetailMeal] = useState<LoggedMeal | null>(null);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
-  const showToast = (msg: string) => {
+  useEffect(() => {
+    return () => {
+      if (toastTimeoutRef.current !== null) {
+        window.clearTimeout(toastTimeoutRef.current);
+      }
+      if (tabTimeoutRef.current !== null) {
+        window.clearTimeout(tabTimeoutRef.current);
+      }
+    };
+  }, []);
+
+  const showToast = useCallback((msg: string) => {
     setToastMessage(msg);
-    setTimeout(() => {
+
+    if (toastTimeoutRef.current !== null) {
+      window.clearTimeout(toastTimeoutRef.current);
+    }
+
+    toastTimeoutRef.current = window.setTimeout(() => {
       setToastMessage(null);
+      toastTimeoutRef.current = null;
     }, 3000);
-  };
+  }, []);
 
   // Water tracking actions
-  const handleAddWater = () => {
+  const handleAddWater = useCallback(() => {
     setNutritionState((prev) => {
       const nextCups = Math.min(prev.totalWaterCups, prev.waterCups + 1);
       if (nextCups === prev.totalWaterCups && prev.waterCups < prev.totalWaterCups) {
@@ -64,23 +78,23 @@ export default function App() {
       }
       return { ...prev, waterCups: nextCups };
     });
-  };
+  }, [showToast]);
 
-  const handleToggleCup = (index: number) => {
+  const handleToggleCup = useCallback((index: number) => {
     setNutritionState((prev) => {
       const newCups = index + 1 === prev.waterCups ? index : index + 1;
       return { ...prev, waterCups: newCups };
     });
-  };
+  }, []);
 
   // Food staging in Log view
-  const handleToggleStageFood = (id: string) => {
+  const handleToggleStageFood = useCallback((id: string) => {
     setFoodItems((prev) =>
       prev.map((item) => (item.id === id ? { ...item, isStaged: !item.isStaged } : item))
     );
-  };
+  }, []);
 
-  const handleUpdateFoodPortion = (id: string, deltaGrams: number) => {
+  const handleUpdateFoodPortion = useCallback((id: string, deltaGrams: number) => {
     setFoodItems((prev) =>
       prev.map((item) => {
         if (item.id === id) {
@@ -98,14 +112,14 @@ export default function App() {
         return item;
       })
     );
-  };
+  }, []);
 
-  const handleClearTray = () => {
+  const handleClearTray = useCallback(() => {
     setFoodItems((prev) => prev.map((item) => ({ ...item, isStaged: false })));
-  };
+  }, []);
 
   // Confirm logging staged meal
-  const handleConfirmLogMeal = () => {
+  const handleConfirmLogMeal = useCallback(() => {
     const staged = foodItems.filter((it) => it.isStaged);
     if (staged.length === 0) return;
 
@@ -156,65 +170,75 @@ export default function App() {
     showToast(`Logged ${totalKcal} kcal to ${activeMeal.toUpperCase()}!`);
 
     // Switch back to Today view to see updated rings and meal card!
-    setTimeout(() => {
+    if (tabTimeoutRef.current !== null) {
+      window.clearTimeout(tabTimeoutRef.current);
+    }
+    tabTimeoutRef.current = window.setTimeout(() => {
       setActiveTab('today');
+      tabTimeoutRef.current = null;
     }, 1200);
-  };
+  }, [activeMeal, foodItems, selectedDate, showToast]);
 
   // Quick calorie add
-  const handleLogQuickCalories = (calories: number, mealType: MealType, note: string) => {
-    setMeals((prev) =>
-      prev.map((m) => {
-        if (m.id === mealType) {
-          return {
-            ...m,
-            calories: m.calories + calories,
-            isLogged: true,
-            description: note || `${m.description} (+${calories} kcal)`,
-            items: [
-              ...(m.items || []),
-              { name: note || 'Quick Calorie Add', calories, portion: '1 serving' },
-            ],
-          };
-        }
-        return m;
-      })
-    );
+  const handleLogQuickCalories = useCallback(
+    (calories: number, mealType: MealType, note: string) => {
+      setMeals((prev) =>
+        prev.map((m) => {
+          if (m.id === mealType) {
+            return {
+              ...m,
+              calories: m.calories + calories,
+              isLogged: true,
+              description: note || `${m.description} (+${calories} kcal)`,
+              items: [
+                ...(m.items || []),
+                { name: note || 'Quick Calorie Add', calories, portion: '1 serving' },
+              ],
+            };
+          }
+          return m;
+        })
+      );
 
-    setNutritionState((prev) => ({
-      ...prev,
-      consumedCalories: prev.consumedCalories + calories,
-      carbsCurrent: prev.carbsCurrent + Math.round(calories * 0.12),
-      proteinCurrent: prev.proteinCurrent + Math.round(calories * 0.06),
-      fatCurrent: prev.fatCurrent + Math.round(calories * 0.04),
-    }));
+      setNutritionState((prev) => ({
+        ...prev,
+        consumedCalories: prev.consumedCalories + calories,
+        carbsCurrent: prev.carbsCurrent + Math.round(calories * 0.12),
+        proteinCurrent: prev.proteinCurrent + Math.round(calories * 0.06),
+        fatCurrent: prev.fatCurrent + Math.round(calories * 0.04),
+      }));
 
-    showToast(`Added ${calories} kcal to ${mealType.toUpperCase()}!`);
-  };
+      showToast(`Added ${calories} kcal to ${mealType.toUpperCase()}!`);
+    },
+    [showToast]
+  );
 
   // Scanned food add
-  const handleScanFood = (newItem: FoodItem) => {
+  const handleScanFood = useCallback((newItem: FoodItem) => {
     setFoodItems((prev) => [newItem, ...prev]);
     showToast(`Scanned: ${newItem.name} added!`);
-  };
+  }, [showToast]);
 
   // Reset meal handler
-  const handleDeleteMeal = (mealId: string) => {
-    const meal = meals.find((m) => m.id === mealId);
-    if (!meal) return;
-    const removedKcal = meal.calories;
+  const handleDeleteMeal = useCallback(
+    (mealId: string) => {
+      const meal = meals.find((m) => m.id === mealId);
+      if (!meal) return;
+      const removedKcal = meal.calories;
 
-    setMeals((prev) =>
-      prev.map((m) => (m.id === mealId ? { ...m, calories: 0, isLogged: false, items: [] } : m))
-    );
+      setMeals((prev) =>
+        prev.map((m) => (m.id === mealId ? { ...m, calories: 0, isLogged: false, items: [] } : m))
+      );
 
-    setNutritionState((prev) => ({
-      ...prev,
-      consumedCalories: Math.max(0, prev.consumedCalories - removedKcal),
-    }));
+      setNutritionState((prev) => ({
+        ...prev,
+        consumedCalories: Math.max(0, prev.consumedCalories - removedKcal),
+      }));
 
-    showToast(`${meal.title} reset`);
-  };
+      showToast(`${meal.title} reset`);
+    },
+    [meals, showToast]
+  );
 
   return (
     <div className="min-h-screen bg-[#f3fcf4] text-[#151d19] font-['Plus_Jakarta_Sans',sans-serif] antialiased flex flex-col relative">
@@ -272,7 +296,7 @@ export default function App() {
       {toastMessage && (
         <div
           id="global-feedback-toast"
-          className="fixed top-20 left-1/2 -translate-x-1/2 z-50 px-4 py-2.5 rounded-full bg-[#25533f] text-white text-[13px] font-bold shadow-xl border border-[#bceed3]/30 flex items-center gap-2 animate-in fade-in slide-in-from-top-4 duration-200"
+          className="fixed top-20 left-1/2 -translate-x-1/2 z-50 px-4 py-2.5 rounded-full bg-[#25533f] text-white text-[13px] font-bold shadow-xl border border-[#bceed3]/30 flex items-center gap-2"
         >
           <span className="material-symbols-outlined text-[18px] text-[#bceed3]">task_alt</span>
           <span>{toastMessage}</span>
